@@ -103,8 +103,7 @@ module OpenIdAuthentication
       end
 
       ActiveSupport.on_load :action_controller do
-        ActionController::Base.send :include, ControllerMethods
-        #ActionController::Base.extend ControllerMethods
+        ActionController::Base.send :include, ::OpenIdAuthentication::ControllerMethods
       end
     end
   end
