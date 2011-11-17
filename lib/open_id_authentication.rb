@@ -3,7 +3,91 @@ require 'openid'
 require 'rack/openid'
 
 module OpenIdAuthentication
-  
+  def self.new(app)
+    store = OpenIdAuthentication.store
+    if store.nil?
+      Rails.logger.warn "OpenIdAuthentication.store is nil. Using in-memory store."
+    end
+
+    ::Rack::OpenID.new(app, OpenIdAuthentication.store)
+  end
+
+  def self.store
+    @@store
+  end
+
+  def self.store=(*store_option)
+    store, *parameters = *([ store_option ].flatten)
+
+    @@store = case store
+    when :memory
+      require 'openid/store/memory'
+      OpenID::Store::Memory.new
+    when :file
+      require 'openid/store/filesystem'
+      OpenID::Store::Filesystem.new(Rails.root.join('tmp/openids'))
+    when :memcache
+      require 'memcache'
+      require 'openid/store/memcache'
+      OpenID::Store::Memcache.new(MemCache.new(parameters))
+    else
+      store
+    end
+  end
+
+  self.store = nil
+
+  if Rails.version >= '3'
+    class Railtie < ::Rails::Railtie
+      config.app_middleware.use OpenIdAuthentication
+
+      config.after_initialize do
+        OpenID::Util.logger = Rails.logger
+      end
+
+      ActiveSupport.on_load :action_controller do
+        ActionController::Base.send :include, ControllerMethods
+        #ActionController::Base.extend ControllerMethods
+      end
+    end
+  end
+
+  class Result
+    ERROR_MESSAGES = {
+      :missing      => "Sorry, the OpenID server couldn't be found",
+      :invalid      => "Sorry, but this does not appear to be a valid OpenID",
+      :canceled     => "OpenID verification was canceled",
+      :failed       => "OpenID verification failed",
+      :setup_needed => "OpenID verification needs setup"
+    }
+
+    def self.[](code)
+      new(code)
+    end
+
+    def initialize(code)
+      @code = code
+    end
+
+    def status
+      @code
+    end
+
+    ERROR_MESSAGES.keys.each { |state| define_method("#{state}?") { @code == state } }
+
+    def successful?
+      @code == :successful
+    end
+
+    def unsuccessful?
+      ERROR_MESSAGES.keys.include?(@code)
+    end
+
+    def message
+      ERROR_MESSAGES[@code]
+    end
+  end
+
   module ControllerMethods
     protected
       # The parameter name of "openid_identifier" is used rather than
@@ -59,89 +143,4 @@ module OpenIdAuthentication
         end
       end
   end
-  
-  def self.new(app)
-    store = OpenIdAuthentication.store
-    if store.nil?
-      Rails.logger.warn "OpenIdAuthentication.store is nil. Using in-memory store."
-    end
-
-    ::Rack::OpenID.new(app, OpenIdAuthentication.store)
-  end
-
-  def self.store
-    @@store
-  end
-
-  def self.store=(*store_option)
-    store, *parameters = *([ store_option ].flatten)
-
-    @@store = case store
-    when :memory
-      require 'openid/store/memory'
-      OpenID::Store::Memory.new
-    when :file
-      require 'openid/store/filesystem'
-      OpenID::Store::Filesystem.new(Rails.root.join('tmp/openids'))
-    when :memcache
-      require 'memcache'
-      require 'openid/store/memcache'
-      OpenID::Store::Memcache.new(MemCache.new(parameters))
-    else
-      store
-    end
-  end
-
-  self.store = nil
-
-  if Rails.version >= '3'
-    class Railtie < ::Rails::Railtie
-      config.app_middleware.use OpenIdAuthentication
-
-      config.after_initialize do
-        OpenID::Util.logger = Rails.logger
-      end
-
-      ActiveSupport.on_load :action_controller do
-        ActionController::Base.send :include, ::OpenIdAuthentication::ControllerMethods
-      end
-    end
-  end
-
-  class Result
-    ERROR_MESSAGES = {
-      :missing      => "Sorry, the OpenID server couldn't be found",
-      :invalid      => "Sorry, but this does not appear to be a valid OpenID",
-      :canceled     => "OpenID verification was canceled",
-      :failed       => "OpenID verification failed",
-      :setup_needed => "OpenID verification needs setup"
-    }
-
-    def self.[](code)
-      new(code)
-    end
-
-    def initialize(code)
-      @code = code
-    end
-
-    def status
-      @code
-    end
-
-    ERROR_MESSAGES.keys.each { |state| define_method("#{state}?") { @code == state } }
-
-    def successful?
-      @code == :successful
-    end
-
-    def unsuccessful?
-      ERROR_MESSAGES.keys.include?(@code)
-    end
-
-    def message
-      ERROR_MESSAGES[@code]
-    end
-  end
-
 end
