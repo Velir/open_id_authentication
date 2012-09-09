@@ -38,6 +38,7 @@ module OpenIdAuthentication
   self.store = nil
 
   if Rails.version >= '3'
+    module ControllerMethods; end
     class Railtie < ::Rails::Railtie
       config.app_middleware.use OpenIdAuthentication
 
