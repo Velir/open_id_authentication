@@ -8,7 +8,7 @@ Gem::Specification.new do |s|
     s.description = %q{open_id_authentication provides a thin wrapper around the excellent rack-openid
                       gem.}
 
-    s.files        = Dir['[A-Z]*', 'lib/**/*.rb']
+    s.files        = Dir['[A-Z]*', 'open_id_authentication.gemspec', 'lib/**/*.rb']
     s.require_path = 'lib'
 
     s.authors = ["Patrick Robertson"]
